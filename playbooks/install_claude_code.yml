@@ -1,0 +1,33 @@
+---
+- name: Install Claude Code CLI
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    claude_bin: "{{ lookup('env', 'HOME') }}/.local/bin/claude"
+
+  tasks:
+    - name: Check if Claude Code is already installed
+      ansible.builtin.stat:
+        path: "{{ claude_bin }}"
+      register: claude_check
+
+    - name: Report existing Claude Code installation
+      ansible.builtin.debug:
+        msg: "Claude Code already installed at {{ claude_bin }}"
+      when: claude_check.stat.exists
+
+    - name: Install Claude Code via official install script
+      ansible.builtin.shell: curl -fsSL https://claude.ai/install.sh | bash
+      args:
+        creates: "{{ claude_bin }}"
+
+    - name: Check Claude Code version
+      ansible.builtin.command: "{{ claude_bin }} --version"
+      register: claude_version
+      changed_when: false
+
+    - name: Report Claude Code version
+      ansible.builtin.debug:
+        msg: "{{ claude_version.stdout }}"

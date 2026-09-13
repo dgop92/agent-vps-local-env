@@ -1,0 +1,12 @@
+---
+- name: Install ripgrep
+  ansible.builtin.import_playbook: install_ripgrep.yml
+
+- name: Install Claude Code CLI
+  ansible.builtin.import_playbook: install_claude_code.yml
+
+- name: Install mise
+  ansible.builtin.import_playbook: install_mise.yml
+
+- name: Install GitHub CLI (gh)
+  ansible.builtin.import_playbook: install_gh.yml
