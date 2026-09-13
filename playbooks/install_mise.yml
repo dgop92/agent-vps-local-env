@@ -1,0 +1,43 @@
+---
+- name: Install mise (polyglot version manager)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    mise_bin: "{{ lookup('env', 'HOME') }}/.local/bin/mise"
+
+  tasks:
+    - name: Check if mise is already installed
+      ansible.builtin.stat:
+        path: "{{ mise_bin }}"
+      register: mise_check
+
+    - name: Report existing mise installation
+      ansible.builtin.debug:
+        msg: "mise already installed at {{ mise_bin }}"
+      when: mise_check.stat.exists
+
+    - name: Install mise via official install script
+      ansible.builtin.shell: curl -fsSL https://mise.run | sh
+      args:
+        creates: "{{ mise_bin }}"
+
+    - name: Add mise activation to .bashrc
+      ansible.builtin.lineinfile:
+        path: "{{ lookup('env', 'HOME') }}/.bashrc"
+        line: 'eval "$({{ mise_bin }} activate bash)"'
+        create: true
+        state: present
+
+    - name: "Nodejs Setup: Install Node.js"
+      ansible.builtin.command: "{{ mise_bin }} use --global node@24.18.0"
+
+    - name: "Nodejs Setup: Install pnpm"
+      ansible.builtin.command: "{{ mise_bin }} use --global pnpm@10.34.5"
+
+    - name: Remind to restart terminal
+      ansible.builtin.debug:
+        msg: >-
+          mise installed and hooked into .bashrc. Restart your terminal (or
+          run `source ~/.bashrc`) for the hook to take effect.

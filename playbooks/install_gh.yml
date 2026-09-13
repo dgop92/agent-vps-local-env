@@ -1,0 +1,37 @@
+---
+- name: Install GitHub CLI (gh)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: Add GitHub CLI apt repository
+      ansible.builtin.deb822_repository:
+        name: github-cli
+        types: deb
+        uris: https://cli.github.com/packages
+        suites: stable
+        components: main
+        architectures: amd64
+        signed_by: https://cli.github.com/packages/githubcli-archive-keyring.gpg
+      become: true
+
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+      become: true
+
+    - name: Install gh
+      ansible.builtin.apt:
+        name: gh
+        state: present
+      become: true
+
+    - name: Check gh version
+      ansible.builtin.command: gh --version
+      register: gh_version
+      changed_when: false
+
+    - name: Report gh installation
+      ansible.builtin.debug:
+        msg: "{{ gh_version.stdout_lines[0] }}"
