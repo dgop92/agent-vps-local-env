@@ -23,6 +23,13 @@
       args:
         creates: "{{ claude_bin }}"
 
+    - name: Add ~/.local/bin to PATH in .bashrc
+      ansible.builtin.lineinfile:
+        path: "{{ lookup('env', 'HOME') }}/.bashrc"
+        line: 'export PATH="$HOME/.local/bin:$PATH"'
+        create: true
+        state: present
+
     - name: Check Claude Code version
       ansible.builtin.command: "{{ claude_bin }} --version"
       register: claude_version
@@ -31,3 +38,9 @@
     - name: Report Claude Code version
       ansible.builtin.debug:
         msg: "{{ claude_version.stdout }}"
+
+    - name: Remind to restart terminal
+      ansible.builtin.debug:
+        msg: >-
+          ~/.local/bin added to PATH in .bashrc. Restart your terminal (or
+          run `source ~/.bashrc`) for it to take effect.
