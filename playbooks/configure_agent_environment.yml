@@ -1,0 +1,120 @@
+---
+- name: Configure agent environment
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    home_dir: "{{ lookup('env', 'HOME') }}"
+    workspace_dir: "{{ home_dir }}/workspace"
+    claude_dir: "{{ home_dir }}/.claude"
+    claude_settings_file: "{{ claude_dir }}/settings.json"
+    claude_md_file: "{{ claude_dir }}/CLAUDE.md"
+    files_dir: "{{ playbook_dir }}/files/configure_agent_environment"
+    merge_script: "{{ files_dir }}/merge_settings.py"
+    agent_git_user_name: "agentworker"
+    agent_git_user_email: "agentworker@users.noreply.github.com"
+
+  tasks:
+    # ------------------------------------------------------------------
+    # 1. Workspace folder
+    # ------------------------------------------------------------------
+    - name: Ensure ~/workspace directory exists
+      ansible.builtin.file:
+        path: "{{ workspace_dir }}"
+        state: directory
+        mode: "0755"
+
+    # ------------------------------------------------------------------
+    # 2. Claude Code permissions (always bypass, non-destructive merge)
+    # ------------------------------------------------------------------
+    - name: Ensure ~/.claude directory exists
+      ansible.builtin.file:
+        path: "{{ claude_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Merge bypassPermissions settings into ~/.claude/settings.json
+      ansible.builtin.command:
+        cmd: "python3 {{ merge_script }} {{ claude_settings_file }} {{ files_dir }}/patches/permissions.json"
+      register: merge_permissions
+      changed_when: "'CHANGED' in merge_permissions.stdout"
+
+    - name: Warn if permissions.defaultMode could not be set
+      ansible.builtin.debug:
+        msg: >-
+          Could not set permissions.defaultMode to bypassPermissions —
+          ~/.claude/settings.json already has a different value configured.
+          Remove or update it manually if you want bypass mode on this
+          machine.
+      when: "'defaultMode' in merge_permissions.stderr"
+
+    # ------------------------------------------------------------------
+    # 3. User-level CLAUDE.md (always overwritten, source of truth is this repo)
+    # ------------------------------------------------------------------
+    - name: Write user-level CLAUDE.md
+      ansible.builtin.copy:
+        src: "{{ files_dir }}/CLAUDE.md"
+        dest: "{{ claude_md_file }}"
+        mode: "0644"
+
+    # ------------------------------------------------------------------
+    # 4. mattpocock/skills plugin
+    # ------------------------------------------------------------------
+    - name: Add mattpocock/skills marketplace
+      ansible.builtin.command:
+        cmd: claude plugin marketplace add mattpocock/skills --scope user
+      changed_when: true
+
+    - name: Install mattpocock-skills plugin
+      ansible.builtin.command:
+        cmd: claude plugin install mattpocock-skills@mattpocock --yes --scope user
+      changed_when: true
+
+    # ------------------------------------------------------------------
+    # 5. Git identity
+    # ------------------------------------------------------------------
+    - name: Set git user.name
+      ansible.builtin.command:
+        cmd: "git config --global user.name {{ agent_git_user_name | quote }}"
+      changed_when: true
+
+    - name: Set git user.email
+      ansible.builtin.command:
+        cmd: "git config --global user.email {{ agent_git_user_email | quote }}"
+      changed_when: true
+
+    - name: Set git init.defaultBranch
+      ansible.builtin.command:
+        cmd: git config --global init.defaultBranch main
+      changed_when: true
+
+    # ------------------------------------------------------------------
+    # 6. gh credential wiring (requires gh to already be authenticated)
+    # ------------------------------------------------------------------
+    - name: Check gh authentication status
+      ansible.builtin.command:
+        cmd: gh auth status
+      register: gh_auth_check
+      changed_when: false
+      failed_when: false
+
+    - name: Fail fast if gh is not authenticated
+      ansible.builtin.assert:
+        that:
+          - gh_auth_check.rc == 0
+        fail_msg: >-
+          gh is not authenticated. Create a GitHub fine-grained Personal
+          Access Token and run `gh auth login --with-token` before running
+          this playbook (see README.md for the recommended workflow).
+        success_msg: "gh is authenticated"
+
+    - name: Set git credential.helper to use gh
+      ansible.builtin.command:
+        cmd: git config --global credential.helper '!gh auth git-credential'
+      changed_when: true
+
+    - name: Set gh git_protocol to https
+      ansible.builtin.command:
+        cmd: gh config set git_protocol https
+      changed_when: true
